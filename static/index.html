@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Filter & Copy Tool</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>File Filter & Copy Tool</h1>
+            <p>Filter files by timestamp and copy to a new destination folder</p>
+        </header>
+        
+        <main>
+            <form id="filterForm">
+                <div class="form-grid">
+                    <div>
+                        <div class="form-group">
+                            <label for="sourceFolder">Source Folder Path</label>
+                            <input type="text" id="sourceFolder" name="source_folder" 
+                                placeholder="C:\Users\username\Documents" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="fromTimestamp">From Timestamp</label>
+                            <input type="text" id="fromTimestamp" name="from_timestamp" 
+                                placeholder="YYYY-MM-DD HH:MM:SS" value="2025-08-01 00:00:00" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="toTimestamp">To Timestamp</label>
+                            <input type="text" id="toTimestamp" name="to_timestamp" 
+                                placeholder="YYYY-MM-DD HH:MM:SS" value="2025-08-20 23:59:59" required>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <div class="form-group">
+                            <label for="fileFormats">File Formats (comma separated)</label>
+                            <input type="text" id="fileFormats" name="file_formats" 
+                                placeholder="jpg, png, pdf" value="jpg, png, pdf" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="destFolderBase">Destination Base Path</label>
+                            <input type="text" id="destFolderBase" name="dest_folder_base" 
+                                placeholder="C:\Users\username\Documents" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="destFolderName">New Folder Name</label>
+                            <input type="text" id="destFolderName" name="dest_folder_name" 
+                                placeholder="Filtered_Files_2025" value="Filtered_Files_2025" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <div class="checkbox-group">
+                                <input type="checkbox" id="useCreatedTime" name="use_created_time" value="true">
+                                <label for="useCreatedTime" style="font-weight: normal;">Use Created Time (instead of Modified Time)</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn" id="submitBtn">
+                    <span>Filter & Copy Files</span>
+                </button>
+            </form>
+            
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>Filtering and copying files... This may take a while for large folders</p>
+            </div>
+            
+            <div class="error-message" id="errorMessage"></div>
+            
+            <div class="result-section" id="resultSection">
+                <div class="result-header">
+                    <h2><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> Operation Completed</h2>
+                    <div class="count-badge" id="fileCount">0 files copied</div>
+                </div>
+                
+                <p><strong>Destination Folder:</strong></p>
+                <div class="destination-path" id="destinationPath"></div>
+                
+                <p><strong>Copied Files:</strong></p>
+                <div class="file-list" id="fileList"></div>
+                
+                <p id="skippedMessage" style="margin-top: 15px; color: var(--gray);"></p>
+            </div>
+        </main>
+        
+        <div class="footer">
+
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('filterForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            // Reset UI
+            document.getElementById('errorMessage').style.display = 'none';
+            document.getElementById('resultSection').style.display = 'none';
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('submitBtn').disabled = true;
+            
+            const formData = new FormData(e.target);
+            const payload = new URLSearchParams();
+            
+            for (const [key, value] of formData) {
+                payload.append(key, value);
+            }
+            
+            try {
+                const response = await fetch('/filter-and-copy', {
+                    method: 'POST',
+                    body: payload
+                });
+                
+                const result = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(result.detail || 'Unknown error occurred');
+                }
+                
+                // Update UI with results
+                document.getElementById('fileCount').textContent = 
+                    `${result.count} file${result.count !== 1 ? 's' : ''} copied`;
+                
+                document.getElementById('destinationPath').textContent = result.destination_folder;
+                
+                const fileList = document.getElementById('fileList');
+                fileList.innerHTML = '';
+                
+                if (result.copied_files.length === 0) {
+                    fileList.innerHTML = '<div class="file-item">No files matched the criteria</div>';
+                } else {
+                    result.copied_files.forEach(file => {
+                        const item = document.createElement('div');
+                        item.className = 'file-item';
+                        item.innerHTML = `<span>${file}</span>`;
+                        fileList.appendChild(item);
+                    });
+                }
+                
+                if (result.skipped_files > 0) {
+                    document.getElementById('skippedMessage').textContent = 
+                        `${result.skipped_files} file${result.skipped_files !== 1 ? 's were' : ' was'} skipped due to errors`;
+                } else {
+                    document.getElementById('skippedMessage').textContent = '';
+                }
+                
+                document.getElementById('resultSection').style.display = 'block';
+                
+            } catch (error) {
+                document.getElementById('errorMessage').textContent = `Error: ${error.message}`;
+                document.getElementById('errorMessage').style.display = 'block';
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('submitBtn').disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
